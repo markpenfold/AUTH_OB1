@@ -1,0 +1,47 @@
+.lnk {
+    padding:4px;
+    color:rgb(17, 225, 114);
+    font-size: 8pt;
+}
+
+.lnk:hover {
+    color:rgb(228, 13, 13);
+}
+
+.lnk_holder {
+    padding:4px;
+    background-color: #e3e1e1;
+    border: saddlebrown solid 1px;
+    margin-bottom: 4px;
+}
+
+.formHolder {
+    padding: 4px;
+}
+
+.p4 {
+    padding:4px;
+}
+
+.right {
+    float:right;
+}
+
+.mr4 {
+    margin-right: 4px;
+}
+
+.ml4 {
+    margin-left: 4px;
+}
+
+.user_name {
+    color:rgb(17, 225, 114);
+}
+
+.bgRed {
+    background-color: rgb(225, 120, 120);
+    border:none;
+    padding:4px;
+    color:ivory;
+}
