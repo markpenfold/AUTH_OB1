@@ -38,13 +38,13 @@ export default async function RootLayout({
   // 3. If we have a user, go get their row from the 'profiles' table
   if (user) {
     const { data } = await supabase
-      .from('profiles') // Replace with your actual table name
+      .from('users') // Replace with your actual table name
       .select('*')
       .eq('id', user.id)
       .single()
     
     profile = data;
-    console.log("full name:", profile.full_name);
+   // console.log("full name:", data.full_name);
     
   }
   

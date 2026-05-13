@@ -5,9 +5,10 @@ import { redirect } from 'next/navigation'
 
 export default async function ConfirmPage() {
     const cookieStore = await cookies()
-    const pending = cookieStore.get('signup-pending')
+    const pending = cookieStore.get('allow_confirm')
     
     if (!pending) {
+        console.log('no cookie for sign up?', pending)
         redirect('/')
       }
 

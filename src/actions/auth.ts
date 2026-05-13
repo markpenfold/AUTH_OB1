@@ -4,16 +4,31 @@
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import {ActionState} from '@/components/UpdatePasswordForm'
+import { updatePasswordSchema } from "@/lib/validations/primitives";
 import { headers } from 'next/headers'
+import { forgotPasswordSchema } from "@/lib/validations/primitives";
+
+export type ActionState = {
+  error?: string;
+  success?: boolean;
+} | null;
+
+
 
 export async function requestPasswordReset(prevState: any, formData: FormData) {
   const email = formData.get('email') as string
   const supabase = await createClient()
-  
   // Get the site URL dynamically so it works in localhost and production
   const origin = (await headers()).get('origin')
 
+  const validated = forgotPasswordSchema.safeParse({ email: email });
+
+  //local zod test for input failed so...
+  if (!validated.success) {
+    return { error: validated.error.issues[0].message };
+  }
+
+  // now send to supabase, and await return value
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     // This tells Supabase where to send the user after they click the email link
     redirectTo: `${origin}/auth/callback?next=/update-password`,
@@ -27,48 +42,31 @@ export async function requestPasswordReset(prevState: any, formData: FormData) {
 }
 
 
+export async function resetPassword(prevState: ActionState, formData: FormData) {
 
-
-
-export async function resetPassword(formData: FormData) {
-  const email = formData.get('email') as string
   const supabase = await createClient()
 
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL}/auth/callback?next=/update-password`,
+  // 1. Convert all form fields to an object for Zod
+  const rawData = Object.fromEntries(formData)
+  // 2. Validate against the schema (this checks password + confirmation match)
+  const validated = updatePasswordSchema.safeParse(rawData)
+
+  if (!validated.success) {
+    // Return Zod issue if validation fails
+    return { error: validated.error.issues[0].message };
+  }
+
+
+  // 3. Supabase only needs the validated password
+  const { error } = await supabase.auth.updateUser({
+    password: validated.data.password
   })
 
   if (error) return { error: error.message }
-  return { success: "Check your email for the reset link!" }
+  
+  // Redirect to login or profile after success
+  redirect('/login?message=Password updated successfully')
 }
-
-
-export async function updatePassword(prevState: ActionState, formData: FormData) {
-  const password = formData.get('password') as string
-  const confirmPassword = formData.get('confirmPassword') as string
-  const supabase = await createClient()
-
-  if (password !== confirmPassword) {
-    // 2. Return an object that matches the 'initialState' shape (null or { error: string })
-    return { error: "Passwords do not match." }
-  }
-
-  if (password.length < 8) {
-    return { error: "Password must be at least 8 characters long." };
-  }
-
-  const { error } = await supabase.auth.updateUser({
-    password: password,
-  })
-
-  if (error) {
-    return { error: error.message }
-  }
-
-  // Password updated! Send them to the dashboard.
-  redirect('/dashboard?message=Password updated successfully')
-}
-
 
 
 export async function login(formData: FormData) {
@@ -95,12 +93,12 @@ export async function logout() {
   redirect('/')
 }
 
-
-
-export async function signup(formData: FormData) {
+export async function signup(prevState: ActionState, formData: FormData): Promise<ActionState> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const name = formData.get('name') as string
+  const username = formData.get('username') as string
+
 
   const cookieStore = await cookies()
   const supabase = await createClient()
@@ -112,6 +110,7 @@ export async function signup(formData: FormData) {
       // Everything inside 'data' goes into raw_user_meta_data
       data: {
         full_name: name,
+        username: username,
         // you could add more here, like 'registration_source: "web"'
       }
     }
@@ -119,7 +118,7 @@ export async function signup(formData: FormData) {
   })
 
   if (error) {
-    redirect(`/signuperror=${encodeURIComponent(error.message)}`)
+    return { error: error.message };
   }
 
   // Set the "One-Time Pass" cookie.

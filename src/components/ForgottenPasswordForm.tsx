@@ -1,14 +1,31 @@
 // components/ForgotPasswordForm.tsx
 'use client'
 
-import { useActionState } from 'react'
+import { useActionState, useState } from 'react'
 import { requestPasswordReset } from '@/actions/auth'
 import styles from "@/app/styles/page.module.css"
+import { forgotPasswordSchema } from '@/lib/validations/primitives'
 import Link from 'next/link'
 
 export function ForgottenPasswordForm() {
   const [state, action, isPending] = useActionState(requestPasswordReset, null)
+  const [clientError, setClientError] = useState<string | null>(null)
+  
+  // Intercept the form submission to run Zod locally first
+  const handleSubmit = async (formData: FormData) => {
+    setClientError(null);
+    const email = formData.get("email") as string;
+    
+    const result = forgotPasswordSchema.safeParse({ email });
+    
+    if (!result.success) {
+      setClientError(result.error.issues[0].message);
+      return; // Stop here, don't trigger the server action
+    }
 
+    action(formData); // All good, proceed to server
+  }
+  
   if (state?.success) {
     return (
       <div className={styles.successCard}>
@@ -24,10 +41,13 @@ export function ForgottenPasswordForm() {
   }
 
   return (
-    <form action={action} className={styles.form}>
+    <form action={handleSubmit} className={styles.form}>
       <p>Enter your email and we'll send you a link to get back into your account.</p>
 
-      {state?.error && <p className={styles.error}>{state.error}</p>}
+      {/* Show either Zod client errors or Supabase server errors */}
+      {(clientError || state?.error) && (
+        <p className={styles.error}>{clientError || state?.error}</p>
+      )}
 
       <div className={styles.gap}>
         <label htmlFor="email">Email Address</label>

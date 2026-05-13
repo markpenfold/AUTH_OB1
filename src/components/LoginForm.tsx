@@ -2,7 +2,7 @@
 'use client'
 
 import { useSearchParams } from 'next/navigation'
-import { login } from '@/actions/auth'
+import { login, ActionState } from '@/actions/auth'
 import styles from '@/app/styles/styles.module.css';
 
 export function LoginForm() {

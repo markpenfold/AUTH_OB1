@@ -1,6 +1,6 @@
-import { UpdatePasswordForm } from '@/components/UpdatePasswordForm';
+import { UpdatePasswordForm } from '@/components/UpdatePasswordForm'
 import styles from "../styles/page.module.css"
-import { createClient } from '@/lib/supabase/server';
+import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 
 
