@@ -5,6 +5,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { SiteNav } from '@/components/SiteNav';
 import { createClient } from '@/lib/supabase/server'
+import { getProfile } from '@/lib/supabase/queries'
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -32,20 +33,14 @@ export default async function RootLayout({
   
   // Always use getUser() not getSession() — getUser() validates with Supabase server
   const { data: { user } } = await supabase.auth.getUser()
+
   // 2. Initialize profile as null
   let profile = null
-
+  
   // 3. If we have a user, go get their row from the 'profiles' table
   if (user) {
-    const { data } = await supabase
-      .from('users') // Replace with your actual table name
-      .select('*')
-      .eq('id', user.id)
-      .single()
-    
-    profile = data;
-   // console.log("full name:", data.full_name);
-    
+    profile = await getProfile()
+    console.log("getProfile is sending: ", profile?.full_name)
   }
   
   return (

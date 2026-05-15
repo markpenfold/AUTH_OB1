@@ -15,7 +15,7 @@ export default async function LoginPage({
   const { data: { user } } = await supabase.auth.getUser()
 
   if (user){
-    redirect('/dashboard?message=Already logged in')
+    //redirect('/')
   }
 
   // 2. Await the searchParams to get the "Password updated" message

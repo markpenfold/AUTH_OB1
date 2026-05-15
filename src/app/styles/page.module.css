@@ -156,3 +156,12 @@ a.secondary {
     --button-secondary-border: #1a1a1a;
   }
 }
+
+.previewAvatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%; /* Makes it a circle */
+  object-fit: cover;   /* Prevents stretching if the image isn't square */
+  border: 2px solid #e2e8f0;
+  background-color: #f8fafc;
+}

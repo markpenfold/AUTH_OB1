@@ -73,7 +73,7 @@ export async function login(formData: FormData) {
     const cookieStore = await cookies()
     const supabase = await createClient()
   
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email: formData.get('email') as string,
       password: formData.get('password') as string,
     })
@@ -82,7 +82,14 @@ export async function login(formData: FormData) {
       redirect('/login?error=Invalid credentials')
     }
   
-    redirect('/dashboard')
+    const { data: membership } = await supabase
+      .from('memberships')
+      .select('account_id')
+      .eq('user_id', data.user.id)
+      .single(); // Assuming only one 'personal' account exists initially
+
+    // Send them to their personal dashboard specifically
+    redirect(`/dashboard/${membership?.account_id}`)
   }
 
 export async function logout() {
