@@ -23,3 +23,15 @@ export interface DashboardUIProps {
   message?: string;
 }
 
+export interface DashboardAccountProps {
+  user: User;
+  accountId: string;
+  message?: string;
+}
+
+export interface DashboardUserProps {
+  user: User;
+  account?: Account;
+  message?: string;
+}
+

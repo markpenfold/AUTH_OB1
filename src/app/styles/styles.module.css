@@ -9,10 +9,13 @@
 }
 
 .lnk_holder {
-    padding:4px;
-    background-color: #e3e1e1;
-    border: saddlebrown solid 1px;
-    margin-bottom: 4px;
+    display: flex;
+  align-items: center;
+  justify-content: space-between; /* This forces Child 1 to the far left and Child 2 to the far right */
+  width: 100%;
+  padding: 0.5rem 1rem;
+  box-sizing: border-box;
+  background-color: rgb(231, 231,231);
 }
 
 .formHolder {
@@ -24,8 +27,8 @@
 }
 
 .right {
-    float:right;
-    margin-right: 100px;
+    display: flex;
+  align-items: center;
 }
 
 .mr4 {
@@ -53,4 +56,82 @@
 
 .loading_label {
     padding: 4px;
+}
+
+.dashBox {
+    padding:4px;
+}
+
+.accBox {
+    padding:4px;
+    color:rgb(32, 145, 100)
+}
+
+.gapBig {
+    margin-top: 12px;
+    margin-bottom: 12px;
+    color: red;
+}
+
+.navBarID {
+    display: flex;
+  align-items: center;       /* Keeps name, avatar, and button centered together */
+  gap: 12px;
+}
+
+.leftLinks {
+    display: flex;
+  align-items: center;
+}
+
+
+.fbox {
+  display: flex;
+  justify-content: center;
+  /* Remove align-items: center so it doesn't anchor to the dead center */
+  align-items: flex-start; 
+  
+  /* Create a comfortable, natural buffer from the top nav bar */
+  padding-top: 80px; 
+  
+  width: 100%;
+  min-height: 80vh; 
+  box-sizing: border-box;
+}
+
+
+/* The parent form grid wrapper */
+.authForm {
+  display: grid;
+  /* Column 1 auto-sizes to your longest label (Username/Full Name) */
+  /* Column 2 stretches to fill all remaining form space */
+  grid-template-columns: max-content 1fr; 
+  gap: 16px 12px; /* 16px row spacing, 12px column spacing */
+  width: 100%;
+  max-width: 400px;
+  align-items: center; /* Vertically aligns text and inputs perfectly on the line */
+}
+
+/* Force headings, error blocks, and buttons to cross both layout columns */
+.authForm h2,
+.authForm p,
+.authForm button {
+  grid-column: span 2;
+}
+
+/* Explicit inputs styling */
+.authForm input {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-sizing: border-box;
+  font-size: 14px;
+}
+
+/* Clean fallback button just to look decent */
+.authForm button {
+  justify-self: start; /* Stops the button from stretching across the entire screen */
+  padding: 6px 16px;
+  cursor: pointer;
 }

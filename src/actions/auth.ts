@@ -81,16 +81,55 @@ export async function login(formData: FormData) {
     if (error) {
       redirect('/login?error=Invalid credentials')
     }
-  
-    const { data: membership } = await supabase
-      .from('memberships')
-      .select('account_id')
-      .eq('user_id', data.user.id)
-      .single(); // Assuming only one 'personal' account exists initially
 
-    // Send them to their personal dashboard specifically
-    redirect(`/dashboard/${membership?.account_id}`)
+    // 2. Get the user's memberships immediately after successful auth
+    const { data: { user } } = await supabase.auth.getUser()
+    
+    if (!user) {
+      return redirect('/login?error=auth-failed')
+    }
+  
+    //this just happens once at login
+    const { data: memberships = []} = await supabase
+    .from('memberships')
+    .select('account_id')
+    .eq('user_id', user.id)
+
+    
+    // 1. Comprehensive Guard Clause (Safe from crashing)
+    // If it's null or empty, handle it and exit.
+    if (!memberships || memberships.length === 0 || memberships[0]?.account_id === null) {
+      redirect('/onboarding/setup-account')
+    }
+
+    // SMART ROUTING WITH MEM COUNT
+    const mem_count = memberships.length || 0
+    const isSingleAccount = mem_count === 1
+    const firstAccountId = memberships[0].account_id
+
+    // 2. Bake the Cookie
+    cookieStore.set('user_workspace_context', JSON.stringify({
+      count: mem_count,
+      defaultId: isSingleAccount ? firstAccountId : null 
+    }), {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 60 * 60 * 24 * 7
+    })
+
+    // 3. Routing
+    if (isSingleAccount) {
+      redirect(`/dashboard/${firstAccountId}`)
+    }
+
+    redirect('/dashboard')
+
+
+
   }
+
+
 
 export async function logout() {
   const cookieStore = await cookies()

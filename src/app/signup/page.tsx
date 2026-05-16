@@ -2,6 +2,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { SignupForm } from '@/components/SignupForm'
 import { redirect } from 'next/navigation'
+import classes from '@/app/styles/styles.module.css'
 
 export default async function SignupPage() {
   
@@ -13,13 +14,8 @@ export default async function SignupPage() {
   }
 
 return (
-    <div>
-        <p>hi</p>
-        <div>
-      <h1>Sign up</h1>
-      <SignupForm />
-    </div>
-
+    <div className={classes.p4}>
+        <SignupForm />
     </div>
 );
 }

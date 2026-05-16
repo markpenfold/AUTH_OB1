@@ -3,7 +3,7 @@
 import { useActionState, useState } from 'react'
 import { signup, ActionState } from '@/actions/auth'
 import { signUpSchema } from '@/lib/validations/primitives'
-import styles from "@/app/styles/page.module.css" // Assuming your style path
+import styles from "@/app/styles/styles.module.css" // Assuming your style path
 
 
 
@@ -31,7 +31,8 @@ export function SignupForm() {
   }
 
   return (
-    <form action={handleSubmit} className={styles.form}>
+  <div className={styles.fbox}>
+    <form action={handleSubmit} className={styles.authForm}>
       <h2>Create a new account</h2>
 
       {/* Unified Error Display */}
@@ -39,29 +40,27 @@ export function SignupForm() {
         <p className={styles.error}>{clientError || state?.error}</p>
       )}
 
-      <div>
-        <label htmlFor="full_name">Full Name</label>
-        <input id="full_name" name="full_name" type="text" placeholder="John Doe" />
-      </div>
+      {/* Row 1 */}
+      <label htmlFor="full_name">Full Name</label>
+      <input id="full_name" name="full_name" type="text" placeholder="John Doe" />
 
-      <div>
-        <label htmlFor="username">Username</label>
-        <input id="username" name="username" type="text" placeholder="johndoe123" />
-      </div>
+      {/* Row 2 */}
+      <label htmlFor="username">Username</label>
+      <input id="username" name="username" type="text" placeholder="johndoe123" />
 
-      <div>
-        <label htmlFor="email">Email</label>
-        <input id="email" name="email" type="email" placeholder="you@example.com" />
-      </div>
+      {/* Row 3 */}
+      <label htmlFor="email">Email</label>
+      <input id="email" name="email" type="email" placeholder="you@example.com" />
 
-      <div>
-        <label htmlFor="password">Password</label>
-        <input id="password" name="password" type="password" placeholder="••••••••" />
-      </div>
+      {/* Row 4 */}
+      <label htmlFor="password">Password</label>
+      <input id="password" name="password" type="password" placeholder="••••••••" />
 
+      {/* Row 5 */}
       <button type="submit" disabled={isPending}>
         {isPending ? 'Creating Account...' : 'Sign up'}
       </button>
     </form>
-  )
+  </div>
+)
 }

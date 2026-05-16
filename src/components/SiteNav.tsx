@@ -31,37 +31,30 @@ export function SiteNav({ user, profile }: { user: User | null, profile: Profile
   const displayName = profile?.full_name || user.email || 'User';
   const avatarSrc = getAvatarUrl(user.id, profile?.has_avatar ?? false, displayName);
 
-  if(profile){
-  console.log("avatar?", profile.has_avatar, 'for: ', profile.full_name);
-  } 
   if(!profile){
-    console.log("no cunting profile in sitenav")
+    console.log("no profile found")
   }
   
   
   return (
-    <nav>
+    <nav className={classes.lnk_holder}>
       {/* Always visible */}
-      <div className={classes.lnk_holder}>
-        <Link className={classes.lnk} href="/">Home</Link>
-        <Link className={classes.lnk}  href="/blog">Blog</Link>
-        <Link className={classes.lnk}  href="/forum">Forum</Link>
-        <Link className={classes.lnk}  href="/charts">Charts</Link>
-      </div>
-
-      <div className={classes.lnk_holder}  >
-        <Link className={classes.lnk}  href="/dashboard">Dashboard</Link>
-        <Link className={classes.lnk}  href="/omenland">OB1</Link>
-        <Link className={classes.lnk}  href="/dashboard/settings">Settings</Link>
-      </div>
-            
-      <div className={classes.right}>
-        <span className={classes.user_name}>{profile?.full_name ?? user.email}</span>
-        
-        <span> {profile?.full_name ?? 'fuk'}</span>
-        <OmenAvatar src={avatarSrc} name={displayName} size="md" />
-        <button className={[classes.ml4,classes.bgRed ].join(" ")} type="submit" onClick={logout}>Logout</button>
-      </div>
+      <div className={classes.leftLinks}>
+    <Link className={classes.lnk} href="/">Home</Link>
+    <Link className={classes.lnk} href="/blog">Blog</Link>
+    <Link className={classes.lnk} href="/forum">Forum</Link>
+    <Link className={classes.lnk} href="/charts">Charts</Link>
+  </div>
+        {/* THE PROFILE ELEMENT (Child 2) */}
+  <div className={classes.right}>
+    <div className={classes.navBarID}>
+      <span className={classes.user_name}>{profile?.full_name ?? user.email}</span>
+      <OmenAvatar src={avatarSrc} name={displayName} size="md" />
+      <button className={[classes.ml4, classes.bgRed].join(" ")} type="submit" onClick={logout}>
+        Logout
+      </button>
+    </div>
+  </div>
           
     </nav>
   )

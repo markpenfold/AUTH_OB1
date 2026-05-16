@@ -70,6 +70,7 @@ export default function AvatarUpload({ userId }: { userId: string }) {
   return (
     <div className={styles.uploader}>
      <label className={styles.loading_label}>Profile Picture</label>
+      {/*
       <img 
         src={previewUrl} 
         alt="Avatar" 
@@ -79,6 +80,7 @@ export default function AvatarUpload({ userId }: { userId: string }) {
           (e.target as HTMLImageElement).src = 'https://ui-avatars.com/api/?name=User';
         }}
       />
+      */}
       <input 
         type="file" 
         onChange={handleFileSelect} 
