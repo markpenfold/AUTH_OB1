@@ -15,5 +15,5 @@ export default async function WorkspacePage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
 
-  return <DashboardAccountUI user={user} accountId={accountId} />;
+  return <DashboardAccountUI accountId={accountId} />;
 }

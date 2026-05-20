@@ -69,7 +69,6 @@ export default function AvatarUpload({ userId }: { userId: string }) {
 
   return (
     <div className={styles.uploader}>
-     <label className={styles.loading_label}>Profile Picture</label>
       {/*
       <img 
         src={previewUrl} 

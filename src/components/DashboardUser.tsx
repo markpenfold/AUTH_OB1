@@ -23,7 +23,6 @@ export async function DashboardUser({ user, message }:DashboardUserProps) {
 
   return (
     <div>
-
       {message && (
         <div style={{ color: 'green', padding: '10px', border: '1px solid green' }}>
           {message}
@@ -32,7 +31,7 @@ export async function DashboardUser({ user, message }:DashboardUserProps) {
       {/* Always visible */}
       <div className={classes.dashBox}>
         <h3>Upload an avatar</h3>
-        <AvatarUpload userId={user.id}/>
+          <AvatarUpload userId={user.id}/>
       </div>
 
       <div className={classes.dashBox}>

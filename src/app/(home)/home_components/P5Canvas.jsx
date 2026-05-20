@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDownToLine } from "lucide-react";
 import ob1Sketch from "./ob1Sketch";
-import classes from "./home.module.css";
+import classes from "@/app/styles/home.module.css";
 
 export default function P5Canvas() {
   const containerRef = useRef(null);

@@ -20,7 +20,8 @@ export function SiteNav({ user, profile }: { user: User | null, profile: Profile
           <Link className={classes.lnk} href="/blog">Blog</Link>
           <div className={classes.right}>
             <Link className={classes.lnk} href="/login">Log in</Link>
-            <Link className={classes.lnk} href="/signup">Sign up</Link>
+            <Link className={classes.lnk} href="/pricing">Pricing</Link>
+            <Link className={classes.lnk} href="/pricing">Sign up</Link>
           </div>
         </div>
       </nav>
@@ -53,6 +54,7 @@ export function SiteNav({ user, profile }: { user: User | null, profile: Profile
       <button className={[classes.ml4, classes.bgRed].join(" ")} type="submit" onClick={logout}>
         Logout
       </button>
+      <Link className={classes.lnk} href="/pricing">Pricing</Link>
     </div>
   </div>
           

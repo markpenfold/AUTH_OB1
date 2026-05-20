@@ -24,7 +24,6 @@ export interface DashboardUIProps {
 }
 
 export interface DashboardAccountProps {
-  user: User;
   accountId: string;
   message?: string;
 }

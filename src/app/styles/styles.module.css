@@ -135,3 +135,93 @@
   padding: 6px 16px;
   cursor: pointer;
 }
+
+/* Tells the checklist container to span both grid columns */
+.checklist {
+  grid-column: span 2;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: -4px; /* Pulls it slightly closer to the password field */
+  padding-left: 4px;
+  font-size: 12px;
+}
+
+/* Red styling for unfulfilled rules */
+.invalid {
+  color: #d93838;
+  transition: color 0.2s ease;
+}
+
+.priceContainer {
+display: grid;
+  /* Column 1 auto-sizes to your longest label (Username/Full Name) */
+  /* Column 2 stretches to fill all remaining form space */
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr; 
+  padding:12px;
+
+}
+
+.priceBox {
+
+  display: flex;
+  flex-direction: column; /* Stacks elements vertically */
+  align-items: center;    /* Centers elements horizontally */
+  justify-content: flex-start; /* Keeps items anchored to the top */
+  max-width: 200px;
+  height:auto;
+  text-align: center;     /* Centers the inline text strings */
+  background-color: rgb(222,222,222);
+  /* Optional but helpful for layout: */
+  padding: 24px;          /* Prevents text from hitting the box edges */
+  gap: 16px;              /* Adds consistent space between titles, prices, and buttons */
+}
+
+.buttonClass {
+    margin-top: auto;
+    background-color: rgb(30,30,30);
+    color: rgb(231, 231,231);
+    padding:8px;
+}
+
+.buttonClass :hover {
+    color: rgb(30,30,30);
+    background-color: rgb(231, 231,231);
+}
+
+
+.pageContainer {
+    display: flex;
+  flex-direction: column; /* Stacks elements vertically */
+  align-items: center;    /* Centers elements horizontally */
+  justify-content: flex-start; /* Keeps items anchored to the top */
+  width: 100%;
+  min-height: 80vh; 
+  box-sizing: border-box;
+  text-align: center;
+}
+
+
+.pageHeader {
+    display: flex;
+    align-items: center; 
+    width: 100%;
+    padding: 12px;
+    text-align: center;  
+}
+
+
+.container2Cols {
+  display: grid;
+  grid-template-columns: 1fr 1fr; 
+  padding:12px;
+}
+
+.container3Cols {
+  display: grid;
+  grid-template-columns: auto auto 1fr; 
+  grid-auto-rows: minmax(55px, auto);
+  gap: 20px;
+  padding:12px;
+}
+

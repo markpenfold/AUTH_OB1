@@ -6,31 +6,107 @@ import  AvatarUpload  from '@/components/AvatarUpload'
 import type { User} from '@supabase/supabase-js'
 import type {Account, DashboardAccountProps} from '@/lib/types'
 import { createClient } from '@/lib/supabase/server'
+import { getAccountOwner } from '@/lib/supabase/queries'
 
-export async function DashboardAccountUI({ user, accountId, message }:DashboardAccountProps) {
 
+export async function DashboardAccountUI({ accountId, message }:DashboardAccountProps) {
 
   const supabase = await createClient()
+
   const { data: account } = await supabase.from('accounts').select('*').eq('id', accountId).single()
     if (!account) return <div>Account not found</div>
+  // 1. Get current logged-in user details
+  const { data: { user } } = await supabase.auth.getUser()
+  // 2. Run our master relational query
+  const ownerProfile = await getAccountOwner(accountId)
+  if (!user || !ownerProfile) {
+    return <p>Loading account details...</p>
+  }
 
+  const isOwner = user.email === ownerProfile
+  const isTeam = account.plan_name === 'team'
+ 
   return (
     <div>
-     
       {message && (
         <div style={{ color: 'green', padding: '10px', border: '1px solid green' }}>
           {message}
         </div>
       )}
       {/* Always visible */}
+      <p className={classes.gapBig}>================== accounts from here ==============================</p>
       <div  className={classes.accBox}>
-        <h1 className={classes.accountHeader}>Details for {account.plan_name} account</h1>
+        <h1 className={classes.accountHeader}>Details for {account.name} account</h1>
+            
+        {isOwner && !isTeam && (
+          <div className={classes.container3Cols}>
+          
+                <div><h3>Account name</h3></div>
+                <div><h3>{account.name}</h3></div>
+                <div><Link className={classes.buttonClass} href="/">Change</Link></div>
+
+
+                <div><h3>Plan</h3></div>
+                <div><h3>{account.plan_name}</h3></div>
+                <div><Link className={classes.buttonClass} href="/pricing">Upgrade</Link></div>
+
+            <div><h3>Account cancellation</h3></div>
+              <div><h3></h3></div>
+              <div><button className={classes.buttonClass} >Cancel</button></div>
+          </div>
+              
+          )}
+            
+              {!isOwner && isTeam &&(
+          <div className={classes.container3Cols}>
             <div>
-                <h3>{account.name}</h3>
-                <p>Plan: </p>
+              <h3>Account admin</h3></div>
+                <div><h3>{ownerProfile}</h3></div>
+                <div><Link className={classes.buttonClass} href="/pricing">Contact</Link></div>
+   
+                <div><h3>Account name</h3></div>
+                <div><h3>{account.name}</h3></div>
+
+              <div><h3>Team Members</h3></div>
+              <div> List of team members here</div>
+              <div><h3>Invite new user to join your team</h3></div>
+              <div><button className={classes.buttonClass} >Invite</button></div>
             </div>
-      </div>
-    
-      </div> 
+          )}
+          
+                
+
+                {/* 🔐 Conditionally render the cancellation section ONLY for the owner */}
+          {isOwner && isTeam &&(
+            <>
+            <div className={classes.container3Cols}>
+
+              <div><h3>Account name</h3></div>
+                <div><h3>{account.name}</h3></div>
+                <div><Link className={classes.buttonClass} href="/pricing">Change</Link></div>
+
+            <div><h3>Plan</h3></div>
+                <div><h3>{account.plan_name}</h3></div>
+                <div><Link className={classes.buttonClass} href="/pricing">Upgrade</Link></div>
+
+            <div><h3>Account cancellation</h3></div>
+              <div><h3></h3></div>
+              <div><button className={classes.buttonClass} >Cancel</button></div>
+
+            </div>
+
+            <div className={classes.container3Cols}><h3>Team Members</h3>
+                <div> List of team members here</div>
+                <div></div>
+                  <div><h3>Invite new user to join your team</h3></div>
+                  <div><button className={classes.buttonClass} >Invite</button></div>
+            </div>
+              </>
+
+          )}
+
+            </div>
+        </div>
+   
   )
 }
