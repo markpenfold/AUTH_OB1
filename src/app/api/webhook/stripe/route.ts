@@ -3,13 +3,17 @@ import { NextResponse } from 'next/server'
 import Stripe from 'stripe'
 import { getAccountByStripeId } from '@/lib/supabase/queries'
 import {createAdminClient} from '@/lib/supabase/admin'
+import { SupabaseClient } from '@supabase/supabase-js'
+
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2026-04-22.dahlia",
 });
 
-const supabaseAdmin = await createAdminClient();
 
+/******************************************************
+ * Main switch board for incoming stripe processes.
+ ********************************************************/
 export async function POST(req: Request) {
   const body = await req.text();
   const signature = (await headers()).get('Stripe-Signature') as string;
@@ -21,33 +25,57 @@ export async function POST(req: Request) {
     return new NextResponse(`Webhook Error: ${err.message}`, { status: 400 });
   }
 
+  // =========================================================
+  // GLOBAL DEFENSIVE GUARD: EARLY EXIT IF CUSTOMER IS DELETED
+  // =========================================================
+  if (isCustomerDeleted(event)) {
+    console.warn(`[Webhook Intercept] Aborted processing for ${event.type} because target customer was deleted.`);
+    return NextResponse.json({ received: true, note: "Ignored deleted customer lifecycle state." });
+  }
+
+  // Initialize inside the execution context
+  const supabaseAdmin = await createAdminClient();
+
+
   try {
     switch (event.type) {
       // 1. Sync Catalog Artifacts
       case 'product.created':
       case 'product.updated':
-        await handleProductSync(event.data.object as Stripe.Product);
+        await handleProductSync(event.data.object as Stripe.Product, supabaseAdmin);
         break;
 
       case 'price.created':
       case 'price.updated':
-        await handlePriceSync(event.data.object as Stripe.Price);
+        await handlePriceSync(event.data.object as Stripe.Price, supabaseAdmin);
         break;
 
       // 2. Provision / Upgrade Core Subscriptions
       case 'checkout.session.completed':
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
-        const response = await handleSubscriptionProvisioning(event);
+        const response = await handleSubscriptionProvisioning(event, supabaseAdmin);
         if (response) return response; // Respects early returns from the internal shield
         break;
 
       // 3. De-provisioning / Teardown
       case 'customer.subscription.deleted':
-        await handleSubscriptionDeletion(event.data.object as Stripe.Subscription);
+        const cancellation = await handleSubscriptionDeletion(event.data.object as Stripe.Subscription, supabaseAdmin);
+        if (cancellation) return cancellation;
         break;
+
+      // 4. Various other subscription state changes
+      case 'invoice.payment_failed':
+      case 'invoice.payment_succeeded':
+      case 'customer.subscription.paused':
+      case 'customer.subscription.resumed':
+        await handleSubscriptionStatus(event, supabaseAdmin);
+        break;
+
+ 
+      }
     }
-  } catch (handlerError: any) {
+   catch (handlerError: any) {
     console.error(`Webhook execution failed internally for ${event.type}:`, handlerError.message);
     // Return a 500 status code so Stripe knows to safely retry transmitting the payload later
     return new NextResponse(`Internal Handler Error`, { status: 500 });
@@ -59,7 +87,7 @@ export async function POST(req: Request) {
 /******************************************************
  * Syncs Stripe Products with Supabase Catalog Tables
  ********************************************************/
-async function handleProductSync(product: Stripe.Product) {
+async function handleProductSync(product: Stripe.Product, supabaseAdmin: SupabaseClient) {
   await supabaseAdmin.from('products').upsert({
     id: product.id,
     active: product.active,
@@ -73,7 +101,7 @@ async function handleProductSync(product: Stripe.Product) {
 /******************************************************
  * Syncs Stripe Prices with Supabase Catalog Tables
  *****************************************************/
-async function handlePriceSync(price: Stripe.Price) {
+async function handlePriceSync(price: Stripe.Price, supabaseAdmin: SupabaseClient) {
   await supabaseAdmin.from('prices').upsert({
     id: price.id,
     product_id: price.product as string,
@@ -89,38 +117,35 @@ async function handlePriceSync(price: Stripe.Price) {
 /******************************************************
  * Handles Complex Provisioning, Idempotency Safeguards, and Rollback Routing
  *****************************************************/
-async function handleSubscriptionProvisioning(event: Stripe.Event) {
+async function handleSubscriptionProvisioning(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
   let customerId: string;
   let subscriptionId: string;
   let planChoice: string | undefined;
   let sessionMetadata: Stripe.Metadata | undefined;
+  let subscriptionObject: Stripe.Subscription;
 
   console.log(`[Webhook Event Received] Type: ${event.type}`);
 
-  // 1. Extract structural data based on the event type
+  // 1. Extract structural data depending cleanly on the event type context
   if (event.type === 'checkout.session.completed') {
     const session = event.data.object as Stripe.Checkout.Session;
     customerId = session.customer as string;
     subscriptionId = session.subscription as string;
-    planChoice = session.metadata?.planChoice || session.metadata?.plan; // Support both naming variants
+    planChoice = session.metadata?.planChoice || session.metadata?.plan; 
     sessionMetadata = session.metadata || undefined;
+    
+    // Checkout sessions don't wrap full subscription schemas inline; request details
+    subscriptionObject = await stripe.subscriptions.retrieve(subscriptionId);
   } else {
-    const subscription = event.data.object as Stripe.Subscription;
-    customerId = subscription.customer as string;
-    subscriptionId = subscription.id;
-    planChoice = subscription.metadata?.planChoice || subscription.metadata?.plan;
-    sessionMetadata = subscription.metadata || undefined; 
+    // No network roundtrip required! Cast directly from memory payload
+    subscriptionObject = event.data.object as Stripe.Subscription;
+    customerId = subscriptionObject.customer as string;
+    subscriptionId = subscriptionObject.id;
+    planChoice = subscriptionObject.metadata?.planChoice || subscriptionObject.metadata?.plan;
+    sessionMetadata = subscriptionObject.metadata || undefined; 
   }
 
-  // 2. Fetch full operational data from Stripe
-  const sub = await stripe.subscriptions.retrieve(subscriptionId);
-  const subscriptionItem = sub.items.data[0];
-  const customerObj = await stripe.customers.retrieve(customerId);
-  
-  if (customerObj.deleted) {
-    console.warn(`[Webhook Warning] Intercepted operational events for an already deleted Stripe customer: ${customerId}`);
-    return;
-  }
+  const subscriptionItem = subscriptionObject.items.data[0];
 
   // =========================================================
   // IDENTITY RESOLUTION PIPELINE
@@ -132,58 +157,93 @@ async function handleSubscriptionProvisioning(event: Stripe.Event) {
   console.log(`[Webhook] Attempting account lookup via Stripe Customer ID: ${customerId}`);
   const matchedAccount = await getAccountByStripeId(customerId);
   
-  // IT WORKED. WE HAVE ACCOUNT AND SUB //////////////////
   if (matchedAccount) {
     userId = matchedAccount.user_id;
     accountId = matchedAccount.id;
     console.log(`[Webhook] Identity found via DB mapping. Account: ${accountId}, User: ${userId}`);
   }
 
-  // PATH B: First Fallback (Extract from Stripe Object Metadata maps)
+  // PATH B: First Fallback (Extract from subscription or session metadata structures)
   if (!userId) {
-    userId = customerObj.metadata?.userId || sessionMetadata?.userId || null;
+    // Look across session metadata first, then fall back to core subscription metadata object
+    userId = sessionMetadata?.userId || subscriptionObject.metadata?.userId || null;
     if (userId) console.log(`[Webhook Recovery] Identity extracted from Stripe object metadata: ${userId}`);
   }
 
-  // PATH C: Second Fallback (Ultimate backup lookup by Customer Email)
-  if (!userId && customerObj.email) {
-    console.log(`[Webhook Warning] Metadata missing. Attempting email lookup for: ${customerObj.email}`);
+  // PATH C: Second Fallback (Lazy-fetch Customer object from Stripe ONLY if lookup failed)
+  if (!userId) {
+    console.log(`[Webhook Warning] Identity missing. Fetching customer profile from Stripe...`);
+    const customerObj = await stripe.customers.retrieve(customerId);
     
-    const { data: userLookup } = await supabaseAdmin
-      .from('users') 
-      .select('id')
-      .eq('email', customerObj.email)
-      .single();
+    if (!customerObj.deleted && customerObj.email) {
+      const { data: userLookup } = await supabaseAdmin
+        .from('users') 
+        .select('id')
+        .eq('email', customerObj.email)
+        .single();
 
-    if (userLookup) {
-      userId = userLookup.id;
-      console.log(`[Webhook Recovery] Successfully recovered userId (${userId}) via email fallback.`);
+      if (userLookup) {
+        userId = userLookup.id;
+        console.log(`[Webhook Recovery] Successfully recovered userId (${userId}) via customer email fallback.`);
+      }
     }
   }
 
-  // KILL PATH: Containment Mechanism if all mapping vectors failed
+  // =========================================================
+  // IDENTITY RESOLUTION PIPELINE - THE KILL PATH
+  // =========================================================
   if (!userId) {
+    // 1. Check for basic idempotency first (if already processed, ignore safely)
     const { data: existingSub } = await supabaseAdmin
-      .from('subscriptions')
+      .from('accounts') 
       .select('id')
-      .eq('id', subscriptionId)
+      .eq('stripe_subscription_id', subscriptionId)
       .single();
 
     if (existingSub) {
-      console.log(`[Idempotency Shield] Safely ignored missing userId for already processed subscription: ${subscriptionId}`);
+      console.log(`[Idempotency Shield] Safely ignored unmappable userId for already processed subscription: ${subscriptionId}`);
       return NextResponse.json({ received: true });
     }
 
-    console.error(`FATAL BILLING ERROR: Unidentifiable transaction context! Customer ID: ${customerId}, Sub ID: ${subscriptionId}`);
+    // 2. Evaluate if this subscription transaction profile carries history
+    let isBrandNewSignup = true;
+    if (subscriptionObject.latest_invoice) {
+      try {
+        const invoice = await stripe.invoices.retrieve(subscriptionObject.latest_invoice as string);
+        if (invoice.billing_reason !== 'subscription_create') {
+          isBrandNewSignup = false;
+        }
+      } catch (invoiceErr) {
+        console.error("[Webhook Recovery] Could not check invoice history, assuming defensive posture.");
+      }
+    }
+
+    // CASE A: Defend against unresolvable brand-new subscription checkouts
+    if (isBrandNewSignup) {
+      console.error(`[FATAL NEW SIGNUP ERROR] Unidentifiable transaction context on creation! Customer: ${customerId}, Sub: ${subscriptionId}. Executing immediate rollback.`);
+      
+      await executeAutoRecoveryRollback(subscriptionObject, customerId, subscriptionId);
+      await sendEmergencyAdminAlert({
+        customerId,
+        subscriptionId,
+        error: "CRITICAL: Brand new checkout finalized, but internal database userId was lost or unresolvable. Subscription forced into rollback loop."
+      });
+      
+      return NextResponse.json({ error: "Fulfillment failed, transaction rolled back safely." }, { status: 422 });
+    } 
     
-    // Execute defensive rollback loops
-    await executeAutoRecoveryRollback(sub, customerId, subscriptionId);
-    await sendEmergencyAdminAlert({
-      customerId,
-      subscriptionId,
-      error: "Payment finalized, but internal database userId was lost or unresolvable across both session and customer data wrappers."
-    });
-    return;
+    // CASE B: Gracefully route existing customer update mismatch triggers out-of-band
+    else {
+      console.error(`[AMBIGUOUS ACCOUNT UPDATE WARNING] Received subscription lifecycle event for Stripe Customer ${customerId} / Sub ${subscriptionId}, but database mapping failed.`);
+      
+      await sendEmergencyAdminAlert({
+        customerId,
+        subscriptionId,
+        error: "NON-FATAL SYNC FAILURE: An existing, active paid subscription fired a lifecycle event, but the user mapping was temporarily unresolvable in Supabase. Handled out-of-band to prevent customer disruption."
+      });
+
+      return NextResponse.json({ received: true, note: "Handled out-of-band to safeguard customer uptime." });
+    }
   }
 
   // =========================================================
@@ -207,10 +267,14 @@ async function handleSubscriptionProvisioning(event: Stripe.Event) {
   // Execute workspace package upgrade changes
   if (accountId) {
     console.log(`[Webhook Debug] Found target account ${accountId}. Provisioning package update...`);
+    const targetTier = planChoice || 'free';
+    
     const { error: accountError } = await supabaseAdmin
       .from('accounts')
       .update({ 
-        plan_name: planChoice || 'free', 
+        plan_name: targetTier, 
+        paid_plan: targetTier, // Sets permanent paid baseline record
+        subscription_status: 'active',
         stripe_customer_id: customerId,
         stripe_subscription_id: subscriptionId,
       })
@@ -219,7 +283,7 @@ async function handleSubscriptionProvisioning(event: Stripe.Event) {
     if (accountError) {
       console.error("[Webhook Debug] Account tier change failure:", accountError);
     } else {
-      console.log(`[Webhook Success] Upgraded account ${accountId} to tier: ${planChoice || 'free'}`);
+      console.log(`[Webhook Success] Upgraded account ${accountId} to tier: ${targetTier}`);
     }
   } else {
     console.error(`CRITICAL: System could not locate an owned account record associated with user ID: ${userId}`);
@@ -228,19 +292,106 @@ async function handleSubscriptionProvisioning(event: Stripe.Event) {
   return NextResponse.json({ received: true });
 }
 
-
-
-
-/**
+/********************************************************
  * Clears database permissions if a subscription is deleted/terminated upstream
- */
-async function handleSubscriptionDeletion(subscription: Stripe.Subscription) {
+ *******************************************************/
+async function handleSubscriptionDeletion(subscription: Stripe.Subscription, supabaseAdmin: SupabaseClient) {
+
+  let customerId = subscription.customer as string;
+  let subscriptionId = subscription.id;
+  let planChoice = subscription.metadata?.planChoice || subscription.metadata?.plan;
+  let sessionMetadata = subscription.metadata || undefined; 
+
+  let userId: string | null = null;
+  let accountId: string | null = null;
+
+  
+  const matchedAccount = await getAccountByStripeId(customerId);
+  
+  // IT WORKED. WE HAVE ACCOUNT AND SUB //////////////////
+  if (matchedAccount) {
+    userId = matchedAccount.user_id;
+    accountId = matchedAccount.id;
+    console.log(`[Webhook] Identity found via DB mapping. Account: ${accountId}, User: ${userId}`);
+  }
+
+  if(!accountId){
+  console.log(`[Webhook Warning] Missing accountId in subscription deletion event. Attempting recovery via Stripe Customer ID: ${customerId}`);
+  return NextResponse.json({ received: false });  
+  }
+
+
   await supabaseAdmin
-    .from('subscriptions')
-    .update({ status: 'canceled', ended_at: new Date().toISOString() })
-    .eq('id', subscription.id);
+    .from('accounts')
+    .update({ 
+        plan_name: 'free', 
+        stripe_customer_id: customerId,
+        stripe_subscription_id: subscriptionId,
+      })
+      .eq('id', accountId);
   
   console.log(`Successfully updated subscription status to canceled for: ${subscription.id}`);
+
+  return NextResponse.json({ received: true });
+
+}
+
+async function handleSubscriptionStatus(event: Stripe.Event, supabaseAdmin: SupabaseClient) {
+  const subscription = event.data.object as Stripe.Subscription;
+  const customerId = subscription.customer as string;
+  
+  const matchedAccount = await getAccountByStripeId(customerId);
+  if (!matchedAccount) return;
+
+  switch (event.type) {
+    case 'customer.subscription.paused':
+      await supabaseAdmin
+        .from('accounts')
+        .update({ 
+          plan_name: 'free',                 // Demote access to free tier constraints
+          subscription_status: 'paused'
+          // paid_plan safely remains 'pro', 'business', etc.
+        })
+        .eq('id', matchedAccount.id);
+      break;
+
+    case 'customer.subscription.resumed': {
+      // Self-Healing Strategy: Fall back to Stripe metadata ONLY if your DB column is empty
+      const targetPlan = matchedAccount.paid_plan || subscription.metadata?.planChoice || 'pro';
+      
+      await supabaseAdmin
+        .from('accounts')
+        .update({ 
+          plan_name: targetPlan,             // Restore active access to their paid tier
+          subscription_status: 'active'
+        })
+        .eq('id', matchedAccount.id);
+      break;
+    }
+
+    case 'invoice.payment_failed':
+      await supabaseAdmin
+        .from('accounts')
+        .update({ 
+          plan_name: 'free',                 // Lock them down due to failed billing
+          subscription_status: 'past_due' 
+        })
+        .eq('id', matchedAccount.id);
+      break;
+
+    case 'invoice.payment_succeeded': {
+      const targetPlan = matchedAccount.paid_plan || subscription.metadata?.planChoice || 'pro';
+      
+      await supabaseAdmin
+        .from('accounts')
+        .update({ 
+          plan_name: targetPlan,             // Recovery success, reopen access lines
+          subscription_status: 'active' 
+        })
+        .eq('id', matchedAccount.id);
+      break;
+    }
+  }
 }
 
 /**
@@ -293,5 +444,30 @@ async function sendEmergencyAdminAlert({ customerId, subscriptionId, error }: Al
   console.error(alertMessage);
 }
 
+/**
+ * Defensive guard to parse and inspect if an incoming customer reference 
+ * has been marked as deleted upstream by Stripe.
+ */
+function isCustomerDeleted(event: Stripe.Event): boolean {
+  let customerParam: string | Stripe.Customer | Stripe.DeletedCustomer | null = null;
 
+  // Extract the raw customer field depending on the structural envelope type
+  if (event.type === 'checkout.session.completed') {
+    customerParam = (event.data.object as Stripe.Checkout.Session).customer;
+  } else if (event.type.startsWith('customer.subscription.') || event.type.startsWith('invoice.')) {
+    // This safely blankets subscriptions and invoice sub-properties
+    customerParam = (event.data.object as any).customer;
+  }
 
+  // If Stripe passed a full object and it contains the truthy deleted flag, catch it
+  if (
+    customerParam && 
+    typeof customerParam === 'object' && 
+    'deleted' in customerParam && 
+    customerParam.deleted
+  ) {
+    return true;
+  }
+
+  return false;
+}

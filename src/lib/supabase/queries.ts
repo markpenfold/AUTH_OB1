@@ -29,7 +29,7 @@ export async function getAccountByStripeId( customerId: string) {
 
   const { data, error } = await supabase
     .from('accounts')
-    .select('id, plan_name, stripe_subscription_id')
+    .select('id, plan_name, stripe_subscription_id, paid_plan')
     .eq('stripe_customer_id', customerId)
     .single()
 

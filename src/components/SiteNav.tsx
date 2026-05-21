@@ -55,6 +55,7 @@ export function SiteNav({ user, profile }: { user: User | null, profile: Profile
         Logout
       </button>
       <Link className={classes.lnk} href="/pricing">Pricing</Link>
+      <Link className={classes.lnk} href="/dashboard">Dashboard</Link>
     </div>
   </div>
           

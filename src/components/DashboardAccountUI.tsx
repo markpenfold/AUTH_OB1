@@ -41,18 +41,34 @@ export async function DashboardAccountUI({ accountId, message }:DashboardAccount
         {isOwner && !isTeam && (
           <div className={classes.container3Cols}>
           
-                <div><h3>Account name</h3></div>
-                <div><h3>{account.name}</h3></div>
-                <div><Link className={classes.buttonClass} href="/">Change</Link></div>
+                
 
-
-                <div><h3>Plan</h3></div>
+                <div><h3>Plan type:</h3></div>
                 <div><h3>{account.plan_name}</h3></div>
-                <div><Link className={classes.buttonClass} href="/pricing">Upgrade</Link></div>
+                <div></div>
 
-            <div><h3>Account cancellation</h3></div>
+            <div><h3>Manage your account</h3></div>
               <div><h3></h3></div>
-              <div><button className={classes.buttonClass} >Cancel</button></div>
+              <div></div>
+
+          <div><h3>Account name</h3></div>
+          <div><h3>{account.name}</h3></div>
+          <div><Link className={classes.buttonClass} href="/">Change</Link></div>
+
+
+          <div><h3>Upgrade your account</h3></div>
+          <div></div>
+          <div><Link className={classes.buttonClass} href="/pricing">Upgrade</Link></div>
+          
+              
+          <div><h3>Cancel your account</h3></div>
+          <div></div>
+          <div><Link className={classes.buttonClass} href="/pricing">Cancel</Link></div>
+          
+          <div><h3>Pause your account</h3></div>
+          <div></div>
+          <div><Link className={classes.buttonClass} href="/pricing">Pause</Link></div>
+          
           </div>
               
           )}
@@ -89,7 +105,7 @@ export async function DashboardAccountUI({ accountId, message }:DashboardAccount
                 <div><h3>{account.plan_name}</h3></div>
                 <div><Link className={classes.buttonClass} href="/pricing">Upgrade</Link></div>
 
-            <div><h3>Account cancellation</h3></div>
+            <div><h3>Manage your account</h3></div>
               <div><h3></h3></div>
               <div><button className={classes.buttonClass} >Cancel</button></div>
 
