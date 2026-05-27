@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import styles from '@/app/styles/styles.module.css';
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { DataLoader } from '@/components/DataLoader';
+import {SuperSimpleTestHarness} from '@/components/data/SuperSimpleTestHarness'
 
 export default async function OmenPage() {
   const cookieStore = await cookies();
@@ -16,7 +16,7 @@ export default async function OmenPage() {
     <div className={styles.formHolder}>
         <div className={styles.p4}>
             <h1>This is the Omen Land</h1>
-            <DataLoader />
+            <SuperSimpleTestHarness  />
         </div>
     </div>
 );

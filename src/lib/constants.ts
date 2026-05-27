@@ -10,3 +10,10 @@ export const getAvatarUrl = (userId: string, hasAvatar: boolean, name: string) =
   console.log("sending this imnage:", `${BUCKET_URL}/${userId}/avatar.png` )
   return `${BUCKET_URL}/${userId}/avatar.png`;
 };
+
+
+export const DuckDBConfig = {
+  CDN_WORKER: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-browser-mvp.worker.js',
+  CDN_MODULE: 'https://cdn.jsdelivr.net/npm/@duckdb/duckdb-wasm@1.28.0/dist/duckdb-mvp.wasm',
+  DB_NAME: 'local_timeline_vault.db',
+};
