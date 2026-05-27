@@ -12,6 +12,7 @@
     "@aws-sdk/client-s3": "^3.1025.0",
     "@aws-sdk/s3-request-presigner": "^3.1025.0",
     "@duckdb/duckdb-wasm": "^1.33.1-dev42.0",
+    "@duckdb/node-api": "^1.5.3-r.2",
     "@hookform/resolvers": "^5.2.2",
     "@stripe/stripe-js": "^9.4.0",
     "@supabase/ssr": "^0.10.0",
