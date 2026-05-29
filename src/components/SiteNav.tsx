@@ -44,7 +44,7 @@ export function SiteNav({ user, profile }: { user: User | null, profile: Profile
     <Link className={classes.lnk} href="/">Home</Link>
     <Link className={classes.lnk} href="/blog">Blog</Link>
     <Link className={classes.lnk} href="/forum">Forum</Link>
-    <Link className={classes.lnk} href="/charts">Charts</Link>
+    <Link className={classes.lnk} href="/omenland">Omenland</Link>
   </div>
         {/* THE PROFILE ELEMENT (Child 2) */}
   <div className={classes.right}>
