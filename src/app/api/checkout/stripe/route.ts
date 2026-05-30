@@ -55,7 +55,7 @@ export async function POST(request: Request) {
       } else {
         const customer = await stripe.customers.create({
           email: user.email,
-          metadata: { userId: user.id },
+          metadata: { userId: user.id, account_id: accountId},
         })
         stripeCustomerId = customer.id
       }
@@ -77,9 +77,9 @@ export async function POST(request: Request) {
       payment_method_types: ['card'],
       mode: 'subscription',
       line_items: [{ price: PRICE_IDS[plan], quantity: 1 }],
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard?success=true`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/pricing?canceled=true`,
-      metadata: { planChoice: plan,  userId: user.id}, // Useful for tracking the overall Checkout Session object
+      metadata: { planChoice: plan,  userId: user.id, account_id:accountId}, // Useful for tracking the overall Checkout Session object
       subscription_data: { metadata: { planChoice: plan, userId: user.id } }
     }
 

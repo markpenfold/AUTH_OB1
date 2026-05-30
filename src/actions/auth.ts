@@ -8,6 +8,8 @@ import { updatePasswordSchema } from "@/lib/validations/primitives";
 import { headers } from 'next/headers'
 import { forgotPasswordSchema } from "@/lib/validations/primitives";
 
+
+
 export type ActionState = {
   error?: string;
   success?: boolean;
@@ -141,7 +143,7 @@ export async function logout() {
 
 
 
-export async function signup(prevState: ActionState, formData: FormData): Promise<ActionState> {
+export async function signup_old(prevState: ActionState, formData: FormData): Promise<ActionState> {
   const email = formData.get('email') as string
   const password = formData.get('password') as string
   const full_name = formData.get('full_name') as string
@@ -189,3 +191,98 @@ export async function signup(prevState: ActionState, formData: FormData): Promis
   redirect('/confirm');
   //https://nxomemwpdnljmenxwdvr.supabase.co/auth/v1/verify?token=pkce_71711d2c1d9ac75f1675e8ff0c9f8bb11fcb892a0563a81607281e63&type=signup&redirect_to=http://localhost:3000
 }
+
+
+export async function registerInvitedUser(formData: any, parentAccountId: string) {
+  const supabase = await createClient()
+
+  const { data, error } = await supabase.auth.signUp({
+    email: formData.email,
+    password: formData.password,
+    options: {
+      data: {
+        full_name: formData.fullName,
+        username: formData.username,
+        // Passing this field fires Step 4 in your database trigger!
+        parent_account_id: parentAccountId 
+      }
+    }
+  })
+}
+
+
+export async function signup(prevState: ActionState, formData: FormData): Promise<ActionState> {
+  const email = (formData.get('email') as string).trim().toLowerCase()
+  const password = formData.get('password') as string
+  const full_name = formData.get('full_name') as string
+  const username = formData.get('username') as string
+  const account_name = formData.get('account_name') as string
+  const planChoice = formData.get('plan_choice') as string
+  
+  // ⚡ Extract the un-guessable token from the hidden input field
+  const inviteToken = formData.get('invite_token') as string | null
+
+  const cookieStore = await cookies()
+  const supabase = await createClient()
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
+
+  let verifiedParentAccountId: string | null = null
+
+  // 🔒 SECURITY CHECK: If joining a team, validate the token first
+  if (inviteToken) {
+    const { data: invite, error: inviteError } = await supabase
+      .from('invitations')
+      .select('account_id, email, expires_at, accepted')
+      .eq('id', inviteToken)
+      .single()
+
+    // 1. Check if token exists or has already been used
+    if (inviteError || !invite || invite.accepted) {
+      return { error: "This invitation is invalid or has already been used." }
+    }
+
+    // 2. Check if the token has expired
+    if (new Date(invite.expires_at) < new Date()) {
+      return { error: "This invitation has expired. Please ask your admin for a new link." }
+    }
+
+    // 3. Prevent Email Hijacking: Ensure they are signing up with the invited email
+    if (invite.email.toLowerCase() !== email) {
+      return { error: "This invitation was sent to a different email address." }
+    }
+
+    // Secure token passes validation. Fetch the true account ID from the DB.
+    verifiedParentAccountId = invite.account_id
+  }
+
+  // Execute standard Supabase signup
+  const { error } = await supabase.auth.signUp({ 
+    email, 
+    password,
+    options: {
+      emailRedirectTo: `${siteUrl}/auth/callback?plan=${planChoice}`,
+      data: {
+        full_name,
+        username,
+        account_name,
+        pending_plan: planChoice,
+        // Pass the backend-verified ID straight to your existing Postgres trigger!
+        parent_account_id: verifiedParentAccountId 
+      }
+    }
+  })
+
+  if (error) return { error: error.message };
+
+  cookieStore.set('allow_confirm', 'true', {
+    maxAge: 600, 
+    path: '/',
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+  })
+
+  redirect('/confirm');
+}
+
+

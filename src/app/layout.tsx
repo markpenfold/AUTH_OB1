@@ -1,11 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "@/app/styles/globals.css";
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import { SiteNav } from '@/components/SiteNav';
-import { createClient } from '@/lib/supabase/server'
-import { getProfile } from '@/lib/supabase/queries'
+import { AuthProvider } from "./auth/context/AuthContext";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,37 +19,20 @@ export const metadata: Metadata = {
   description: "History in the making",
 };
 
-export default async function RootLayout({
+export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-
-  const cookieStore = await cookies()
-  const supabase = await createClient()
-  
-  // Always use getUser() not getSession() — getUser() validates with Supabase server
-  const { data: { user } } = await supabase.auth.getUser()
-
-  // 2. Initialize profile as null
-  let profile = null
-  
-  // 3. If we have a user, go get their row from the 'profiles' table
-  if (user) {
-    profile = await getProfile()
-    console.log("getProfile is sending: ", profile?.full_name)
-  }
-  
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>
-        <SiteNav  user={user} profile={profile} />
-        {children}
-        
-        </body>
+      <body className="antialiased">
+        {/* 🌐 Wrap everything in the Auth Context Core */}
+        <AuthProvider>
+          <SiteNav /> {/* No more props needed! */}
+          {children}
+        </AuthProvider>
+      </body>
     </html>
   );
 }
-
-
-

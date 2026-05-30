@@ -68,6 +68,30 @@ export async function getAccountOwnerId(accountId:string): Promise<string | null
 
 
 
+
+export async function getAccountIdFromOwner(user_id:string): Promise<string | null> {
+  const supabase = await createClient()
+
+  if (!user_id) return null
+
+  // 1. Get the owner's user_id from memberships
+  const { data: membership, error: memError } = await supabase
+    .from('memberships')
+    .select('account_id')
+    .eq('user_id', user_id )
+    .eq('role', 'owner')
+    .single()
+
+  if (memError || !membership?.account_id) {
+    console.error(`[Query Error] No account found for  ${user_id}`, memError?.message)
+    return null
+  }
+    return membership.account_id
+}
+
+
+
+
 export async function getAccountOwner(accountId:string): Promise<string | null> {
   const supabase = await createClient()
 

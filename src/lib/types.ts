@@ -26,6 +26,7 @@ export interface DashboardUIProps {
 export interface DashboardAccountProps {
   accountId: string;
   message?: string;
+  session_id?: string;
 }
 
 export interface DashboardUserProps {
@@ -34,3 +35,7 @@ export interface DashboardUserProps {
   message?: string;
 }
 
+
+export interface DashboardLoaderProps {
+  session_id: string;
+}

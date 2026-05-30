@@ -1,10 +1,8 @@
 import { cookies } from 'next/headers'
-import { DataAccessPanel } from '@/components/dashboard/data/DataAccessPanel'
 import Link from 'next/link'
 import classes from '@/app/styles/styles.module.css'
 import  AvatarUpload  from '@/components/AvatarUpload'
-import type { User} from '@supabase/supabase-js'
-import type {Account, DashboardUserProps} from '@/lib/types'
+import type {DashboardUserProps} from '@/lib/types'
 
 
 export async function DashboardUser({ user, message }:DashboardUserProps) {

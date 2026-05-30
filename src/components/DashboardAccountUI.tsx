@@ -7,9 +7,10 @@ import type { User} from '@supabase/supabase-js'
 import type {Account, DashboardAccountProps} from '@/lib/types'
 import { createClient } from '@/lib/supabase/server'
 import { getAccountOwner } from '@/lib/supabase/queries'
+import { ClientDashboardLoader } from './ClientDashboardLoader'
 
 
-export async function DashboardAccountUI({ accountId, message }:DashboardAccountProps) {
+export async function DashboardAccountUI({ accountId, message, session_id }:DashboardAccountProps) {
 
   const supabase = await createClient()
 
@@ -25,6 +26,11 @@ export async function DashboardAccountUI({ accountId, message }:DashboardAccount
 
   const isOwner = user.email === ownerProfile
   const isTeam = account.plan_name === 'team'
+
+  // handle potential race condition between stripe return and db update
+  if (session_id && account.plan_name === 'free') {
+    return <ClientDashboardLoader session_id={session_id} />
+  }
  
   return (
     <div>
@@ -92,7 +98,7 @@ export async function DashboardAccountUI({ accountId, message }:DashboardAccount
           
                 
 
-                {/* 🔐 Conditionally render the cancellation section ONLY for the owner */}
+                {/* Conditionally render the cancellation section ONLY for the owner */}
           {isOwner && isTeam &&(
             <>
             <div className={classes.container3Cols}>
