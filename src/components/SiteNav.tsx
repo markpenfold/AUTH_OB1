@@ -1,4 +1,5 @@
 // components/SiteNav.tsx
+"use client"
 
 import Link from 'next/link'
 import type { User } from '@supabase/supabase-js'
@@ -18,11 +19,21 @@ export function SiteNav() {
   // LOADING SKELETON: Prevents the navigation from flashing layout changes during boots
   if (isLoading) {
     return (
+      <>
+      <div> <span className="text-slate-500 text-xs animate-pulse">Synchronizing session...</span></div>
       <nav className={classes.lnk_holder}>
         <div className={classes.leftLinks}>
-          <span className="text-slate-500 text-xs animate-pulse">Synchronizing session...</span>
+          
+          <Link className={classes.lnk} href="/">Home</Link>
+          <Link className={classes.lnk} href="/blog">Blog</Link>
         </div>
+        <div className={classes.right}>
+            <Link className={classes.lnk} href="/login">Log in</Link>
+            <Link className={classes.lnk} href="/pricing">Pricing</Link>
+            <Link className={classes.lnk} href="/pricing">Sign up</Link>
+          </div>
       </nav>
+      </>
     )
   }
 

@@ -1,22 +1,36 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { DashboardAccountUI } from '@/components/DashboardAccountUI'
-import { DashboardUI } from '@/components/DashboardUI'
-import type { Account } from '@/lib/types'
 
 type DashboardProps = {
-  searchParams: Promise<{ session_id?: string, accountId: string }>
+  params: Promise<{ accountId: string }>
+  searchParams: Promise<{ session_id?: string; message?: string }>
 }
 
-
-export default async function WorkspacePage({ searchParams }: DashboardProps) {
-  const params = await searchParams
-  const  accountId  = params.accountId;
-  const stripeSessionId = params.session_id;
-  const supabase = await createClient();
+export default async function WorkspacePage({ params, searchParams }: DashboardProps) {
+  // 1. Resolve your asynchronous Next.js layout parameters
+  const resolvedParams = await params
+  const resolvedSearchParams = await searchParams
   
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  const accountId = resolvedParams.accountId
+  const stripeSessionId = resolvedSearchParams.session_id
+  const message = resolvedSearchParams.message
 
-  return <DashboardAccountUI accountId={accountId} />;
+  // 2. Authenticate the user securely on the backend
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // 🛡️ Guard: If no cookie session exists, reject them right here
+  if (!user) {
+    redirect('/login')
+  }
+
+  // 🚀 Pass verified server data straight down into the UI template
+  return (
+    <DashboardAccountUI 
+      accountId={accountId} 
+      session_id={stripeSessionId} 
+      message={message} 
+    />
+  )
 }

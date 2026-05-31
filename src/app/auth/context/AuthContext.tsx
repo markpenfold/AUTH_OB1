@@ -5,7 +5,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { isReallyOnline } from '@/lib/utils/checkOnline'
 
-type AuthTier = 'free' | 'pro' | 'team' | 'founder'
+type AuthTier = 'free' | 'pro' | 'team' | 'founder' | null
 
 type AuthUser = {
   id: string
@@ -46,7 +46,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isLoading: true,
     isAuthorized: false,
     isOnline: true, // ping will confirm or deny
-    tier: 'free',
+    tier: null,
     user: null,
     account: null,
     roster: [],
@@ -196,7 +196,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         isLoading: false,
         isAuthorized: false,
         isOnline: navigator.onLine,
-        tier: 'free',
+        tier: null,
         user: null,
         account: null,
         roster:[]

@@ -1,25 +1,25 @@
-import { createClient } from '@/lib/supabase/server'
+'use client'
+
 import classes from '@/app/styles/styles.module.css'
 import Link from 'next/link' //
 import { CheckoutButton } from '@/components/CheckoutButton'
-
+import { useAuth } from '../auth/context/AuthContext'
+import { useSearchParams } from 'next/navigation'
 // Simple helper to check active subscription tier state
 function get_plan(id: string) {
   // Replace this placeholder with a database fetch down the line
   return 'free' 
 }
 
-export default async function PricingPage({ searchParams }: {
-  searchParams: Promise<{ error?: string }>;
-}) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser()
-  const resolvedParams = await searchParams;
-  const error = resolvedParams?.error;
+export default function PricingPage() {
+  const { user, tier } = useAuth()
+
+  const searchParams = useSearchParams()
+  const error = searchParams.get('error')
   
   let current_plan = 'none'
-  if (user) {
-    current_plan = get_plan(user.id)
+  if (tier) {
+    current_plan = tier
   }
 
   // Helper array to keep the HTML rendering neat, organized, and DRY

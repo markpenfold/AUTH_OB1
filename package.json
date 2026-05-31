@@ -27,7 +27,8 @@
     "react-hook-form": "^7.75.0",
     "resend": "^6.12.4",
     "stripe": "^22.1.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "zustand": "^5.0.14"
   },
   "devDependencies": {
     "@types/node": "^20",
