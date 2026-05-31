@@ -22,6 +22,7 @@ export default async function WorkspacePage({ params, searchParams }: DashboardP
 
   // 🛡️ Guard: If no cookie session exists, reject them right here
   if (!user) {
+    console.log("user NOT FOUND in accountId dashboard")
     redirect('/login')
   }
 

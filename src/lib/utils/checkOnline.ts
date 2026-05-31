@@ -7,11 +7,12 @@ export async function isReallyOnline(): Promise<boolean> {
   }
 
   try {
-    await fetch('/ping', { 
+    await fetch('/api/ping', { 
       method: 'HEAD',
       cache: 'no-store', // Force it to bypass the browser cache completely
       signal: AbortSignal.timeout(2000) // Cut the cord if the server takes > 2 seconds
     });
+    console.log("hello")
     return true;
   } catch {
     return false;

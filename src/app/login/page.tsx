@@ -3,6 +3,7 @@ import { LoginForm } from '@/components/LoginForm'
 import styles from '@/app/styles/styles.module.css'
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 
 type LoginProps = {
   searchParams: Promise<{ message?: string }>
@@ -13,9 +14,29 @@ export default async function LoginPage({ searchParams }: LoginProps) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  // If already logged in, bounce them immediately before sending HTML
+  
+  // If already logged in, route them intelligently instead of dumping them on the homepage
   if (user) {
-    redirect('/')
+    const cookieStore = await cookies()
+    const workspaceContext = cookieStore.get('user_workspace_context')
+    
+    let destination = '/dashboard'
+    
+    if (workspaceContext?.value) {
+      try {
+        const context = JSON.parse(workspaceContext.value)
+        // If they only have one workspace, match your Server Action logic
+        if (context.count === 1 && context.defaultId) {
+          destination = `/dashboard/${context.defaultId}`
+        }
+      } catch (e) {
+        // Fallback safely to standard dashboard if JSON parsing fails
+        destination = '/dashboard'
+      }
+    }
+
+    console.log(`User already logged in. Redirecting straight to: ${destination}`)
+    redirect(destination)
   }
 
   const { message } = await searchParams

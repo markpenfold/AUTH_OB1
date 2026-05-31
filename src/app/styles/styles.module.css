@@ -225,3 +225,12 @@ display: grid;
   padding:12px;
 }
 
+.errorText {
+  color:rgba(224, 35, 35. 0.8);
+  font-size: small;
+
+}
+
+
+
+

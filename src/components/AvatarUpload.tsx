@@ -52,6 +52,7 @@ export default function AvatarUpload({ userId }: { userId: string }) {
     const { error } = await supabase.storage
       .from('avatars')
       .upload(filePath, selectedFile, {
+        cacheControl: '0',
         upsert: true // This overwrites the old file if it exists
       });
 

@@ -14,7 +14,7 @@ export const getProfile = cache(async () => {
 
   const { data: profile } = await supabase
     .from('profiles') // Ensure this matches your table name
-    .select('id, full_name, has_avatar, username')
+    .select('id, full_name, has_avatar, username, updated_at')
     .eq('id', user.id)
     .single()
   console.log("getP is finding:", profile)

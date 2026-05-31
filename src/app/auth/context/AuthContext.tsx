@@ -1,7 +1,6 @@
-// src/context/AuthContext.tsx
 'use client'
 
-import React, { createContext, useContext, useEffect, useState } from 'react'
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { isReallyOnline } from '@/lib/utils/checkOnline'
 
@@ -13,6 +12,7 @@ type AuthUser = {
   fullName: string
   username: string
   hasAvatar: boolean
+  updatedAt: string
 }
 
 type AuthAccount = {
@@ -34,116 +34,167 @@ type AuthState = {
   user: AuthUser | null
   account: AuthAccount | null
   roster: WorkspaceItem[]
+  workloads: any[]
 }
+
+interface AuthProviderProps {
+  children: React.ReactNode
+  serverUser: any | null
+  serverProfile: any | null
+}
+
 
 const AuthContext = createContext<AuthState | undefined>(undefined)
 
-// executes on refresh 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-
-  // Set up state for our auth object
+export function AuthProvider({ children, serverUser, serverProfile }: AuthProviderProps) {
+  
+  // 🌟 Bootstrap the state instantly using server data if it exists!
   const [state, setState] = useState<AuthState>({
-    isLoading: true,
-    isAuthorized: false,
-    isOnline: true, // ping will confirm or deny
-    tier: null,
-    user: null,
+    isLoading: !serverUser, // If server found a user, we aren't loading from scratch!
+    isAuthorized: !!serverUser,
+    isOnline: true,
+    tier: null, // Roster mapping will fill this in right after mount
+    user: serverUser ? {
+      id: serverUser.id,
+      email: serverUser.email || '',
+      fullName: serverProfile?.full_name || serverUser.email || 'User',
+      username: serverProfile?.username || '',
+      hasAvatar: serverProfile?.has_avatar ?? false,
+      updatedAt: serverProfile?.updated_at || '',
+    } : null,
     account: null,
     roster: [],
+    workloads: [],
   })
 
-  // runs on component render client side only
+  // Use a ref to keep track of the current request sequence to prevent race conditions
+  const requestCount = useRef(0)
+
   useEffect(() => {
     const supabase = createClient()
+    let isMounted = true
 
-
-    const triggerRecheck = function() {
-      return resolveAuthentication();
+    const triggerRecheck = () => {
+      resolveAuthentication()
     }
 
     // 📡 Network status listeners
-    // When network status changes, run triggerRecheck
     window.addEventListener('online', triggerRecheck)
     window.addEventListener('offline', triggerRecheck)
 
-    ////////////////////////////////////////////////////////////////////////
-    // evaluates conditions linearly ///////////////////////////////////////
-    // acts as security gatekeeper   ///////////////////////////////////////
-    ////////////////////////////////////////////////////////////////////////
     async function resolveAuthentication() {
-      // 🕵️‍♂️ Step 1: Run your custom ping check
+      const currentRequestInstance = ++requestCount.current
       const verifiedOnline = await isReallyOnline()
+
+      // Prevent processing if the component unmounted during the ping check
+      if (!isMounted) return
 
       // ==========================================
       // 🚀 TIER 1: ONLINE RESOLUTION
       // ==========================================
       if (verifiedOnline) {
         try {
-          ////////////////////////////////////////////////////////////////////////////////////
-          // We are online so get user auth from supabase -> put it in authUser  /////////////
-          ////////////////////////////////////////////////////////////////////////////////////
           const { data: { user: authUser }, error: authError } = await supabase.auth.getUser()
 
-          // The golden path /////////////////////////////////////////////////////////////////
-          if (authUser && !authError) {
-          // ONE QUERY: Pulls their profile and ALL their workspaces at once
-          const { data: memberships, error: dbError } = await supabase
+          if (!isMounted || currentRequestInstance !== requestCount.current) return
+
+          if (!authUser || authError) {
+            localStorage.removeItem('app_auth_snapshot')
+            setState({
+              isLoading: false,
+              isAuthorized: false,
+              isOnline: true,
+              tier: null,
+              user: null,
+              account: null,
+              roster: [],
+              workloads: []
+            })
+            return
+          }
+
+          const profilePromise = supabase
+            .from('profiles')
+            .select('full_name, username, has_avatar, updated_at')
+            .eq('id', authUser.id)
+            .single()
+
+          const membershipsPromise = supabase
             .from('memberships')
             .select(`
               account_id,
               role,
-              accounts ( plan_name ),
-              profiles ( full_name, username, has_avatar )
+              accounts ( plan_name )
             `)
             .eq('user_id', authUser.id)
 
-            if (dbError || !memberships || memberships.length === 0) throw new Error("No workspaces found")
+          const [profileResponse, membershipsResponse] = await Promise.all([
+            profilePromise,
+            membershipsPromise
+          ])
 
-            // 1. Extract global profile details from the first workspace entry
-            const sampleProfile = memberships[0].profiles as any
-            const liveUser: AuthUser = {
-              id: authUser.id,
-              email: authUser.email || '',
-              fullName: sampleProfile?.full_name || authUser.email || 'User',
-              username: sampleProfile?.username || '',
-              hasAvatar: sampleProfile?.has_avatar ?? false,
-            }
+          // Double check component status after heavy database calls
+          if (!isMounted || currentRequestInstance !== requestCount.current) return
 
-            // 2. Map their entire hot-swappable workspace roster
-            const workspaceRoster = memberships.map((m: any) => ({
-              accountId: m.account_id,
-              role: m.role,
-              tier: m.accounts?.plan_name || 'free'
-            }))
+          const { data: profile, error: profileError } = profileResponse
+          const { data: memberships, error: dbError } = membershipsResponse
 
-            // 3. Determine their ACTIVE workspace (default to the first one, or read from a URL/Cookie)
-            const activeWorkspace = workspaceRoster[0]
+          if (profileError) console.error('❌ Profile sub-query failed:', profileError.message)
+          if (dbError) console.error('❌ Memberships sub-query failed:', dbError.message)
 
-            // Create a cohesive onlineState object
-            const onlineState: AuthState = {
-              isLoading: false,
-              isAuthorized: true,
-              isOnline: true,
-              tier: activeWorkspace.tier, // Dynamic tier based on active space
-              user: liveUser,
-              account: { id: activeWorkspace.accountId, role: activeWorkspace.role },
-              roster: workspaceRoster // The whole list is kept in memory for instant switching!
-            }
+          // 1. Safe sort logic
+          const sortedMemberships = (memberships || []).sort((a, b) => {
+            const roleA = a?.role || 'member'
+            const roleB = b?.role || 'member'
+            if (roleA === 'owner' && roleB !== 'owner') return -1
+            if (roleA !== 'owner' && roleB === 'owner') return 1
+            return 0
+          })
 
-            // THE MIRROR: Save detailed snapshot mapping structures to local memory
-            localStorage.setItem('app_auth_snapshot', JSON.stringify({
+          const liveUser: AuthUser = {
+            id: authUser.id,
+            email: authUser.email || '',
+            fullName: profile?.full_name || authUser.email || 'User',
+            username: profile?.username || '',
+            hasAvatar: profile?.has_avatar ?? false,
+            updatedAt: profile?.updated_at || '',
+          }
+
+          const workspaceRoster: WorkspaceItem[] = sortedMemberships.map((m: any) => ({
+            accountId: m.account_id,
+            role: m.role,
+            tier: m.accounts?.plan_name || 'free'
+          }))
+
+          const activeWorkspace = workspaceRoster[0] || null
+          const liveAccount: AuthAccount | null = activeWorkspace ? { id: activeWorkspace.accountId, role: activeWorkspace.role } : null
+          const liveTier: AuthTier = activeWorkspace ? (activeWorkspace.tier as AuthTier) : 'free'
+
+          const onlineState: AuthState = {
+            isLoading: false,
+            isAuthorized: true,
+            isOnline: true,
+            tier: liveTier,
+            user: liveUser,
+            account: liveAccount,
+            roster: workspaceRoster,
+            workloads: []
+          }
+
+          localStorage.setItem('app_auth_snapshot', JSON.stringify({
             user: liveUser,
             roster: workspaceRoster,
-            activeAccountId: activeWorkspace.accountId,
+            account: liveAccount,
+            tier: liveTier,
+            workloads: [],
             timestamp: Date.now(),
           }))
 
-          //The runtime updates dispatcher hook, setting everything in motion
           setState(onlineState)
           return
-          }
+
         } catch (err) {
-          console.warn('[Auth] Network issues. Moving to local fallback.')
+          console.warn('[Auth] Network request crashed. Forcing local fallback evaluation.', err)
         }
       }
 
@@ -152,74 +203,88 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // ==========================================
       const localSnapshotRaw = localStorage.getItem('app_auth_snapshot')
       
-      if (localSnapshotRaw) {
-        const snapshot = JSON.parse(localSnapshotRaw)
-        
-        // Hard evaluation window threshold limit (30-day structural expiration checkpoint)
-        const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
-        const isExpired = Date.now() - snapshot.timestamp > THIRTY_DAYS
+      if (localSnapshotRaw && isMounted && currentRequestInstance === requestCount.current) {
+        try {
+          const snapshot = JSON.parse(localSnapshotRaw)
+          const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000
+          const isExpired = Date.now() - snapshot.timestamp > THIRTY_DAYS
 
-        if (!isExpired) {
-          // 🔒 PREMIUM GATEKEEPER SWITCH
-          // Disconnect unauthorized/free tier entities immediately when disconnected from the network
-          if (snapshot.tier === 'free') {
+          if (!isExpired) {
+            if (snapshot.tier === 'free') {
+              setState({
+                isLoading: false,
+                isAuthorized: false,
+                isOnline: false,
+                tier: 'free',
+                user: null,
+                account: null,
+                roster: [],
+                workloads: []
+              })
+              return
+            }
+
             setState({
               isLoading: false,
-              isAuthorized: false, // 🛑 Booted out due to time out
+              isAuthorized: true,
               isOnline: false,
-              tier: 'free',
-              user: null,
-              account: null,
-              roster:[]
+              tier: snapshot.tier,
+              user: snapshot.user,
+              account: snapshot.account,
+              roster: snapshot.roster,
+              workloads: []
             })
             return
           }
-
-          // 🟢 PAID USERS: Bypass network validation constraints seamlessly
-          setState({
-            isLoading: false,
-            isAuthorized: true, 
-            isOnline: false,
-            tier: snapshot.tier,
-            user: snapshot.user,
-            account: snapshot.account,
-            roster: snapshot.roster,
-          })
-          return
+        } catch (parseError) {
+          console.error('❌ Failed parsing local storage snapshot corrupt text:', parseError)
+          localStorage.removeItem('app_auth_snapshot') // Clear bad data automatically
         }
       }
 
       // ==========================================
-      // ❌ TIER 3: DENIED (Unauthenticated or Expired Snapshot)
+      // ❌ TIER 3: DENIED
       // ==========================================
-      setState({
-        isLoading: false,
-        isAuthorized: false,
-        isOnline: navigator.onLine,
-        tier: null,
-        user: null,
-        account: null,
-        roster:[]
-      })
+      if (isMounted && currentRequestInstance === requestCount.current) {
+        setState({
+          isLoading: false,
+          isAuthorized: false,
+          isOnline: verifiedOnline,
+          tier: null,
+          user: null,
+          account: null,
+          roster: [],
+          workloads: []
+        })
+      }
     }
 
+    // ⚡ INITIAL RUN
     resolveAuthentication()
 
+    // 🔄 REALTIME AUTH STATE LISTENER (Keeps context synchronized on sign-in/sign-out actions)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        resolveAuthentication()
+      }
+    })
+
     return () => {
+      isMounted = false
       window.removeEventListener('online', triggerRecheck)
       window.removeEventListener('offline', triggerRecheck)
+      subscription.unsubscribe()
     }
   }, [])
 
   return <AuthContext.Provider value={state}>{children}</AuthContext.Provider>
 }
 
-// Any component consuming a context re-renders when the context value changes
-// useContext lets you read and subscribe to shared data from anywhere in the component tree
 export function useAuth() {
   const context = useContext(AuthContext)
   if (context === undefined) {
     throw new Error('useAuth must be consumed strictly within an AuthProvider configuration wrapper.')
   }
+  console.log("sending auth context:", context)
   return context
 }

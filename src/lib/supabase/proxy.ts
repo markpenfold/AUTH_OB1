@@ -42,8 +42,8 @@ export async function updateSession(request: NextRequest) {
   const { data } = await supabase.auth.getClaims()
 
   const user = data?.claims
-  // we wan the unauthenticated user to have access to these rountes 
-  // all other routes are effectively private 
+  // we want the unauthenticated user to have access to ONLY these rountes 
+  // ALL other routes are effectively private 
   if (
     !user &&
     !request.nextUrl.pathname.startsWith('/login') &&
@@ -58,6 +58,7 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Token hash structure validator for explicit confirmation parameters
   if (request.nextUrl.pathname.startsWith('/confirm')) {
     const token = request.nextUrl.searchParams.get('token_hash')
     if (!token) {
@@ -65,6 +66,22 @@ export async function updateSession(request: NextRequest) {
       url.pathname = '/'
       return NextResponse.redirect(url)
     }
+  }
+
+  // 💳 INTERNAL BILLING DETECTION RADAR
+  // If an active user hits the dashboard coming from a Stripe upgrade/downgrade event,
+  // drop a short-lived flash cookie telling the client layer its local storage is stale.
+  if (
+    user && 
+    (request.nextUrl.searchParams.has('session_id') || request.nextUrl.searchParams.has('billing_updated'))
+  ) {
+    supabaseResponse.cookies.set('x-sync-local-storage', 'true', {
+      maxAge: 15,            // Expired automatically after 15 seconds
+      path: '/',             // Available application-wide
+      httpOnly: false,       // CRITICAL: Must be false so client-side JS can read it!
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production'
+    })
   }
 
   // IMPORTANT: You *must* return the supabaseResponse object as it is. If you're

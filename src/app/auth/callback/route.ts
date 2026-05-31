@@ -14,7 +14,7 @@ export async function GET(request: Request) {
   // SECURITY Strictly sanitize the redirect path to prevent open redirects
   let next = searchParams.get('next') || '/dashboard'
   if (!next.startsWith('/') || next.startsWith('//')) {
-    console.log("OH DO FUCK OFF")
+    console.log("OH DEAR, what is wrong with the redirect?")
     next = '/dashboard'
   }
   
@@ -25,19 +25,20 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/auth/auth-code-error', siteUrl).toString())
   }
 
-  if (code) {
-    const supabase = await createClient()
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code)
+  // Alright, we have a code from the user, let's go!
+  const supabase = await createClient()
+  const { data, error } = await supabase.auth.exchangeCodeForSession(code)
 
-    // Got an error or missing user? Get out early.
-    if (error || !data?.user) {
-      return NextResponse.redirect(new URL('/auth/auth-code-error', siteUrl).toString())
-    }
+  // Got an error or missing user? Get out early.
+  if (error || !data?.user) {
+    return NextResponse.redirect(new URL('/auth/auth-code-error', siteUrl).toString())
+  }
     
     // SUCCESS PATH
   const user = data.user
   const supabaseAdmin = await createAdminClient()
   
+  //Background Provisioning: Safe to execute because we have the verified user object
   try {
     const { data: membership } = await supabaseAdmin
       .from('memberships')
@@ -50,12 +51,12 @@ export async function GET(request: Request) {
     // @ts-ignore
     const existingStripeId = membership?.accounts?.stripe_customer_id
     
+    // Set stripe ID if not already done 
     if (currentAccountId && !existingStripeId) {
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: { userId: user.id },
       })
-
       await supabaseAdmin
         .from('accounts')
         .update({ stripe_customer_id: customer.id })
@@ -66,19 +67,32 @@ export async function GET(request: Request) {
   }
 
   // Final happy-path redirect
-  console.log("HAPPY NOW?", user?.user_metadata?.pending_plan)
-  
-    const pendingPlan = user?.user_metadata?.pending_plan
+  const pendingPlan = user?.user_metadata?.pending_plan
 
-    // 🚀 IF THEY CHOSE A PAID PLAN, SEND THEM TO STRIPE CHECKOUT INSTEAD OF THE DASHBOARD
-    if (pendingPlan && pendingPlan !== 'free') {
-      const checkoutUrl = new URL('/api/checkout/stripe', siteUrl)
-      checkoutUrl.searchParams.set('plan', pendingPlan)
-      checkoutUrl.searchParams.set('userId', user.id)
-      if (user.email) checkoutUrl.searchParams.set('email', user.email)
-      
-      return NextResponse.redirect(checkoutUrl.toString())
-    }
-  return NextResponse.redirect(new URL(next, siteUrl).toString())
+  // PATH A:IF THEY CHOSE A PAID PLAN, SEND THEM TO STRIPE CHECKOUT INSTEAD OF THE DASHBOARD
+  if (pendingPlan && pendingPlan !== 'free') {
+    const checkoutUrl = new URL('/api/checkout/stripe', siteUrl)
+    checkoutUrl.searchParams.set('plan', pendingPlan)
+    checkoutUrl.searchParams.set('userId', user.id)
+    if (user.email) checkoutUrl.searchParams.set('email', user.email)
+    
+    return NextResponse.redirect(checkoutUrl.toString())
   }
+
+  // 🟢 PATH B: FREE PLAN / STANDARD SIGNUP CONFIRMATION
+  // Wipe out the auto-authenticated server session cookie completely.
+  // This guarantees they are forced through your dedicated LoginForm entry point.
+  await supabase.auth.signOut()
+
+  // Assemble the destination login URL, carrying forward the success parameters
+  const loginRedirectUrl = new URL('/login', siteUrl)
+  loginRedirectUrl.searchParams.set('verified', 'true')
+
+  // If they were trying to deep-link somewhere specific, preserve it!
+  if (next && next !== '/dashboard') {
+    loginRedirectUrl.searchParams.set('next', next)
+  }
+
+  return NextResponse.redirect(loginRedirectUrl.toString())
+  
 }

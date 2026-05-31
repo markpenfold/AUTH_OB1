@@ -7,7 +7,10 @@ import type { Account } from '@/lib/types'
 export default async function DashboardRootPage() {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user){
+    console.log("redirect from within main dashboard page")
+     redirect('/login')
+    };
 
   const { data: memberships } = await supabase
     .from('memberships')
@@ -15,7 +18,7 @@ export default async function DashboardRootPage() {
     .eq('user_id', user.id);
 
   if (!memberships || memberships.length === 0) {
-    redirect('/onboarding/setup-account');
+    redirect('/pricing');
   }
 
   // If only one account, skip the picker and go straight to the workspace URL

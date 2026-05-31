@@ -1,103 +1,101 @@
-// components/SiteNav.tsx
-"use client"
+'use client'
 
 import Link from 'next/link'
-import type { User } from '@supabase/supabase-js'
-import classes from '@/app/styles/styles.module.css';
-import { logout } from "@/actions/auth";
-import OmenAvatar from './OmenAvatar';
-import {Profile} from "@/lib/types"
-import { getAvatarUrl } from '@/lib/constants';
-import { useAuth } from '@/app/auth/context/AuthContext';
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/app/auth/context/AuthContext'
+import { createClient } from '@/lib/supabase/client'
+import classes from '@/app/styles/sitenav.module.css'
 
+interface SiteNavProps {
+  initialUser: any | null
+  initialProfile: any | null
+}
 
-export function SiteNav() {
+export function SiteNav({ initialUser, initialProfile }: SiteNavProps) {
+  const router = useRouter()
+  const supabase = createClient()
+  
+  // 1. Extract exactly what your context returns
+  const { user: offlineUser, isOnline, isAuthorized: offlineAuth } = useAuth()
 
-  // 1. Grab everything directly from the client state engine
-  const { user, isLoading, isOnline, tier } = useAuth()
+  // 2. Resolve authentication status
+  // Authenticated if the server layout found a cookie, OR if the offline context says true
+  const activeUser = initialUser || offlineUser
+  const isAuthorized = !!initialUser || offlineAuth
 
-  // LOADING SKELETON: Prevents the navigation from flashing layout changes during boots
-  if (isLoading) {
-    return (
-      <>
-      <div> <span className="text-slate-500 text-xs animate-pulse">Synchronizing session...</span></div>
-      <nav className={classes.lnk_holder}>
-        <div className={classes.leftLinks}>
-          
-          <Link className={classes.lnk} href="/">Home</Link>
-          <Link className={classes.lnk} href="/blog">Blog</Link>
-        </div>
-        <div className={classes.right}>
-            <Link className={classes.lnk} href="/login">Log in</Link>
-            <Link className={classes.lnk} href="/pricing">Pricing</Link>
-            <Link className={classes.lnk} href="/pricing">Sign up</Link>
-          </div>
-      </nav>
-      </>
-    )
+  // 3. 🧠 Smart Field Extraction (Server snake_case vs Client camelCase)
+  // We use lookarounds to bypass empty strings '' or nulls gracefully
+  const rawName = initialProfile?.full_name || offlineUser?.fullName || activeUser?.email || 'User'
+  const username = initialProfile?.username || offlineUser?.username || activeUser?.email?.split('@')[0] || 'user'
+  const hasAvatar = initialProfile?.has_avatar || offlineUser?.hasAvatar
+
+  // If the fullName field is just their email, we clean up the presentation name
+  const displayName = rawName.includes('@') ? rawName.split('@')[0] : rawName
+
+  const handleLogout = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    await supabase.auth.signOut()
+    localStorage.removeItem('app_auth_snapshot')
+    window.location.href = '/login'
   }
 
-
-  // 2. GUEST VIEW: If no user is authenticated, 
-  // exit early with the landing links
-  if (!user) {
-    return (
-      <nav>
-        <div className={classes.lnk_holder}>
-          <Link className={classes.lnk} href="/">Home</Link>
-          <Link className={classes.lnk} href="/blog">Blog</Link>
-          <div className={classes.right}>
-            <Link className={classes.lnk} href="/login">Log in</Link>
-            <Link className={classes.lnk} href="/pricing">Pricing</Link>
-            <Link className={classes.lnk} href="/pricing">Sign up</Link>
-          </div>
-        </div>
-      </nav>
-    )
+  // Safe initials parser that handles names, usernames, or email prefixes cleanly
+  const getInitials = (name: string) => {
+    const cleanName = name.replace(/[._+]/g, ' ') // turn mark_penfold into mark penfold
+    return cleanName
+      .split(' ')
+      .map((n) => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
   }
 
-
-  // 3. AUTHENTICATED VIEW: Evaluated safely because 'user' is guaranteed to exist.
-  // We use the camelCased properties pre-assembled by our AuthContext resolution loop.
-  const displayName = user.fullName || user.email || 'User'
-  const avatarSrc = getAvatarUrl(user.id, user.hasAvatar, displayName)
+  const avatarUrl = hasAvatar 
+    ? `${process.env.NEXT_PUBLIC_SUPABASE_URL}/storage/v1/object/public/avatars/${activeUser?.id}.png`
+    : null
 
   return (
-    <nav className={classes.lnk_holder}>
-      {/* Navigation Links (Left Side) */}
-      <div className={classes.leftLinks}>
-        <Link className={classes.lnk} href="/">Home</Link>
-        <Link className={classes.lnk} href="/blog">Blog</Link>
-        <Link className={classes.lnk} href="/forum">Forum</Link>
-        <Link className={classes.lnk} href="/omenland">Omenland</Link>
-        
-        {/* Optional: Visual proof of subscription level and connectivity status */}
-        <span className="text-[10px] ml-2 px-1.5 py-0.5 bg-slate-800 rounded border border-slate-700 text-slate-400 font-mono capitalize">
-          {tier} {isOnline ? '🟢' : '✈️'}
-        </span>
+    <nav className={classes.container}>
+      <div className={classes.linksGroup}>
+        <Link href="/" className={classes.brandLink}>⚡ MainApp</Link>
+        {isAuthorized && (
+          <Link href="/dashboard" className={classes.link}>Dashboard</Link>
+        )}
       </div>
 
-      {/* User Actions & Profile Elements (Right Side) */}
-      <div className={classes.right}>
-        <div className={classes.navBarID}>
-          <span className={classes.user_name}>{user.fullName}</span>
-          
-          <OmenAvatar src={avatarSrc} name={displayName} size="md" />
-          
-          <button 
-            className={[classes.ml4, classes.bgRed].join(" ")} 
-            type="submit" 
-            onClick={logout}
-          >
-            Logout
-          </button>
-          
-          <Link className={classes.lnk} href="/pricing">Pricing</Link>
-          <Link className={classes.lnk} href="/dashboard">Dashboard</Link>
-        </div>
+      <div>
+        {isAuthorized && activeUser ? (
+          <div className={classes.userSection}>
+            {!isOnline && <span className={classes.offlineBadge}>Offline Mode</span>}
+            
+            <div className={classes.profileMeta}>
+              <span className={classes.userName}>{displayName}</span>
+              <span className={classes.usernameSub}>@{username}</span>
+            </div>
+
+            {avatarUrl ? (
+              <img 
+                src={avatarUrl} 
+                alt={`${displayName}'s avatar`} 
+                className={classes.avatar}
+                onError={(e) => {
+                  (e.target as HTMLImageElement).style.display = 'none'
+                }}
+              />
+            ) : (
+              <div className={classes.avatarFallback}>
+                {getInitials(displayName)}
+              </div>
+            )}
+
+            <button onClick={handleLogout} className={classes.logoutBtn}>
+              Logout
+            </button>
+          </div>
+        ) : (
+          <Link href="/login" className={classes.loginBtn}>Login</Link>
+        )}
       </div>
     </nav>
   )
-
-
-}// ends
+}

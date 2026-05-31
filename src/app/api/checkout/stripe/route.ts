@@ -14,6 +14,11 @@ const PRICE_IDS: Record<string, string> = {
   founder: process.env.STRIPE_PRICE_FOUNDER!,
 }
 
+/**
+ * POST ENDPOINT: Internal Upgrades
+ * For users already logged into the app upgrading their plan.
+ */
+
 export async function POST(request: Request) {
   try {
     // 1. Extract body variables securely via JSON payload
